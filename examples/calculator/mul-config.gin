@@ -1,0 +1,5 @@
+import ops
+
+main.fun = @mul
+mul.x = %x
+mul.y = %y
