@@ -4,6 +4,8 @@ import typing as tp
 import gin
 from absl import app, flags
 
+from gacl.callbacks import Callback, CallbackList
+
 flags.DEFINE_multi_string("gin_file", default=[], help="gin files to include")
 flags.DEFINE_multi_string("bindings", default=[], help="Additional gin bindings")
 flags.DEFINE_boolean(
@@ -19,13 +21,30 @@ flags.DEFINE_bool(
 )
 
 
+@gin.register(module="gacl")
 def print_gin_config():
     print(gin.config.config_str())
 
 
 @gin.configurable(module="gacl")
-def main(fun: tp.Callable[[], tp.Any] = print_gin_config):
-    return fun()
+def main(
+    fun: tp.Callable[[], tp.Any] = print_gin_config,
+    callbacks: tp.Union[Callback, tp.Iterable[Callback]] = (),
+):
+    if isinstance(callbacks, Callback):
+        callback = callbacks
+    else:
+        callback = CallbackList(*callbacks)
+    callback.on_start()
+    try:
+        result = fun()
+        callback.on_completed(result)
+    except KeyboardInterrupt as interrupt:
+        callback.on_interrupt(interrupt)
+        raise interrupt
+    except Exception as exception:  # pylint: disable=broad-except
+        callback.on_exception(exception)
+        raise exception
 
 
 def app_main(args=None):
