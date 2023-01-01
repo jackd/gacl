@@ -30,24 +30,29 @@ def print_gin_config():
 def main(
     fun: tp.Callable[[], tp.Any] = print_gin_config,
     callbacks: tp.Union[Callback, tp.Iterable[Callback]] = (),
+    num_trials: int = 1,
 ):
     if isinstance(callbacks, Callback):
         callback = callbacks
     else:
+        assert hasattr(callbacks, "__iter__"), callbacks
         callback = CallbackList(*callbacks)
-    callback.on_start()
-    try:
-        result = fun()
-        callback.on_completed(result)
-    except KeyboardInterrupt as interrupt:
-        callback.on_interrupt(interrupt)
-        raise interrupt
-    except Exception as exception:  # pylint: disable=broad-except
-        callback.on_exception(exception)
-        raise exception
+    callback.on_start(num_trials)
+    for trial_id in range(num_trials):
+        callback.on_trial_start(trial_id)
+        try:
+            result = fun()
+            callback.on_trial_completed(trial_id, result)
+        except KeyboardInterrupt as interrupt:
+            callback.on_trial_interrupt(trial_id, interrupt)
+            raise interrupt
+        except Exception as exception:  # pylint: disable=broad-except
+            callback.on_trial_exception(trial_id, exception)
+            raise exception
+    callback.on_end()
 
 
-def app_main(args=None):
+def parse_clargs(args=None):
     if args is None:
         args = sys.argv
     FLAGS = flags.FLAGS
@@ -61,6 +66,10 @@ def app_main(args=None):
     gin.parse_config_files_and_bindings(
         files, bindings, finalize_config=FLAGS.finalize_config
     )
+
+
+def app_main(args=None):
+    parse_clargs(args)
     main()
 
 
